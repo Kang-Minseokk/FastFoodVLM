@@ -1,0 +1,5 @@
+# food_image는 따로 관리를 하도록 합니다.
+/data/food_image
+
+# run 디렉토리
+/runs

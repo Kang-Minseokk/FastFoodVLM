@@ -383,6 +383,8 @@ def train(hyp, opt, device, callbacks):
         LOGGER.info(("\n" + "%11s" * 7) % ("Epoch", "GPU_mem", "box_loss", "obj_loss", "cls_loss", "Instances", "Size"))
         if RANK in {-1, 0}:
             pbar = tqdm(pbar, total=nb, bar_format=TQDM_BAR_FORMAT)  # progress bar
+            # nohup에서 진행할 때는 위의 인자에 miniters=nb 를 설정하여 한 에폭마다 한 번의 출력만을 
+            # 보여주도록 해줍니다.
         optimizer.zero_grad()
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             callbacks.run("on_train_batch_start")

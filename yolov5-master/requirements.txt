@@ -4,7 +4,7 @@
 # Base ------------------------------------------------------------------------
 gitpython>=3.1.30
 matplotlib>=3.3
-numpy>=1.23.5
+numpy==1.26.4
 opencv-python>=4.1.1
 psutil  # system resources
 PyYAML>=5.3.1
@@ -59,3 +59,6 @@ setuptools>=70.0.0 # Snyk vulnerability fix
 # mss  # screenshots
 # albumentations>=1.0.3
 # pycocotools>=2.0.6  # COCO mAP
+
+# conv_pt_to_mlmodel ----------------------------------------------------------
+coremltools == 6.2

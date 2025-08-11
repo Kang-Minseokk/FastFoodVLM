@@ -15,7 +15,7 @@ val: ./food_image/images/val
 #test: # test images (optional)
 
 # Classes
-nc: 39
+nc: 41
 
 names:
   0: jjajangmyeon
@@ -57,6 +57,8 @@ names:
   36: nacho
   37: sandwich
   38: kiwi
+  39: churros
+  40: avocado
 
 # Download script/URL (optional)
 #download: #https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128-seg.zip

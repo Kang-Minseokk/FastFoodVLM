@@ -11,3 +11,5 @@ models/__pycache__/
 utils/loggers/
 *.pyo
 *.pyd
+
+/food_data

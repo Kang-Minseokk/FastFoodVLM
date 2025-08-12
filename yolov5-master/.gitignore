@@ -13,3 +13,6 @@ utils/loggers/
 *.pyd
 
 /food_data
+yolov5m.pt
+yolov5s.pt
+yolov5x.pt

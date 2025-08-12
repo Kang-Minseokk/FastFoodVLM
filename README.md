@@ -44,6 +44,8 @@ python train.py
 
 ### ✅ 참고
 * data/ 디렉토리는 .gitignore 처리되어 GitHub에는 업로드되지 않습니다.
+* mlmodel을 만들기 위해서는 Conv_pt_to_mlmodel.ipynb 파일을 실행시키는 것이 아니라, conv_pt_to_mlmodel.py를 실행해주면 됩니다.
+  편의를 위해서 주피터 파일에서 하나의 파이썬 파일로 변경하였습니다. (2025. 08. 11)
 
 ---
 

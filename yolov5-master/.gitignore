@@ -16,3 +16,5 @@ utils/loggers/
 yolov5m.pt
 yolov5s.pt
 yolov5x.pt
+
+result

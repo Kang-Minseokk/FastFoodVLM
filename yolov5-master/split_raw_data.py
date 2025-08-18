@@ -1,85 +1,53 @@
-import os, glob, yaml
-from collections import defaultdict
+import random
+import shutil
+import os
 
-# ==== 경로 설정 ====
-DATA_YAML = "data/food.yaml"          # data.yaml 경로
-DATA_ROOT = "data/food_image"         # images/, labels/ 가 들어있는 루트
-SPLIT = "train"                            # 'train' 또는 'val'
+base_output_dir = './data/food_image'
+train_image_dir = os.path.join(base_output_dir, 'images/train')
+val_image_dir = os.path.join(base_output_dir, 'images/val')
+train_label_dir = os.path.join(base_output_dir, 'labels/train')
+val_label_dir = os.path.join(base_output_dir, 'labels/val')
 
-# ==== 유틸 ====
-IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
+for d in [train_image_dir, val_image_dir, train_label_dir, val_label_dir]:
+    os.makedirs(d, exist_ok=True)
 
-with open(DATA_YAML, 'r') as f:
-    y = yaml.safe_load(f)
-names = y.get('names', [])
-nc = y.get('nc', len(names))
+# 분할할 음식의 이름을 작성해주세요
+dir_names = ["blueberry"]
 
-labels_dir = os.path.join(DATA_ROOT, "labels", SPLIT)
-images_dir = os.path.join(DATA_ROOT, "images", SPLIT)
+# 이미지 및 라벨 파일 수집
+all_image_label_pairs = []
+parent_directory_path = './raw_data'
 
-# 이미지 목록
-img_files = [p for p in glob.glob(os.path.join(images_dir, "*"))
-             if os.path.splitext(p)[1].lower() in IMG_EXTS]
+for dir_name in dir_names:
+    image_dir = os.path.join(parent_directory_path, dir_name, 'images')
+    label_dir = os.path.join(parent_directory_path, dir_name, 'labels')
 
-cls_instance_cnt = defaultdict(int)   # 클래스별 인스턴스(박스) 수
-cls_image_set    = defaultdict(set)   # 클래스별 등장한 이미지 집합
-missing_labels = []
-bad_label_files = []
+    image_files = [f for f in os.listdir(image_dir) if f.endswith(('.jpg', '.png'))]
 
-for img_path in img_files:
-    base = os.path.splitext(os.path.basename(img_path))[0]
-    lbl_path = os.path.join(labels_dir, base + ".txt")
-    if not os.path.exists(lbl_path):
-        missing_labels.append(img_path)
-        continue
+    for img_file in image_files:
+        label_file = os.path.splitext(img_file)[0] + '.txt'
+        img_path = os.path.join(image_dir, img_file)
+        lbl_path = os.path.join(label_dir, label_file)
+        if os.path.exists(lbl_path):
+            all_image_label_pairs.append((img_path, lbl_path))
 
-    try:
-        with open(lbl_path, "r") as f:
-            lines = [l.strip() for l in f.readlines() if l.strip()]
-        if not lines:
-            continue
+# 데이터 셔플 및 분할
+random.seed(42)
+random.shuffle(all_image_label_pairs)
+split_idx = int(len(all_image_label_pairs) * 0.8)
+train_pairs = all_image_label_pairs[:split_idx]
+val_pairs   = all_image_label_pairs[split_idx:]
 
-        seen_classes_in_this_image = set()
-        for line in lines:
-            # YOLO: <class_id> <xc> <yc> <w> <h> [optional extra]
-            parts = line.split()
-            cid = int(parts[0])
-            if nc and (cid < 0 or cid >= nc):
-                raise ValueError(f"class_id {cid} out of range [0,{nc-1}] in {lbl_path}")
-            cls_instance_cnt[cid] += 1
-            seen_classes_in_this_image.add(cid)
+# 복사 함수
+def copy_pairs(pairs, image_dst_dir, label_dst_dir):
+    for img_src, lbl_src in pairs:
+        img_dst = os.path.join(image_dst_dir, os.path.basename(img_src))
+        lbl_dst = os.path.join(label_dst_dir, os.path.basename(lbl_src))
+        shutil.copy(img_src, img_dst)
+        shutil.copy(lbl_src, lbl_dst)
 
-        for cid in seen_classes_in_this_image:
-            cls_image_set[cid].add(img_path)
+# 복사 실행
+copy_pairs(train_pairs, train_image_dir, train_label_dir)
+copy_pairs(val_pairs, val_image_dir, val_label_dir)
 
-    except Exception as e:
-        bad_label_files.append((lbl_path, str(e)))
-
-# ==== 출력 ====
-total_images = len(img_files)
-labeled_images = total_images - len(missing_labels)
-total_instances = sum(cls_instance_cnt.values())
-
-print(f"[요약] split: {SPLIT}")
-print(f"- 총 이미지 수: {total_images}")
-print(f"- 라벨 있는 이미지 수: {labeled_images}")
-print(f"- 라벨 누락 이미지 수: {len(missing_labels)}")
-print(f"- 총 인스턴스(박스) 수: {total_instances}")
-print()
-
-print("클래스별 통계 (class_id | name | 인스턴스 수 | 등장 이미지 수):")
-for cid in sorted(set(cls_instance_cnt.keys()) | set(cls_image_set.keys())):
-    name = names[cid] if cid < len(names) else f"class_{cid}"
-    inst = cls_instance_cnt[cid]
-    imgc = len(cls_image_set[cid])
-    print(f"{cid:3d} | {name:20s} | {inst:6d} | {imgc:6d}")
-
-if missing_labels:
-    print("\n[라벨 누락 예시 5개]")
-    for p in missing_labels[:5]:
-        print(" -", p)
-
-if bad_label_files:
-    print("\n[비정상 라벨 파일 예시]")
-    for p, err in bad_label_files[:5]:
-        print(f" - {p}: {err}")
+print(f"총 {len(all_image_label_pairs)}개 중 {len(train_pairs)}개는 훈련용, {len(val_pairs)}개는 검증용으로 복사되었습니다.")

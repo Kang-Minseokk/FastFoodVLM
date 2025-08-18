@@ -1,9 +1,11 @@
 import os
 import re
 
-def change_hamburger_labels(labels_path='data/food_image/labels/val'):
+food_name = "blueberry"
+
+def change_food_labels(labels_path=f"./raw_data/{food_name}/labels"):
     """
-    hamburger{숫자}.txt 파일들의 클래스 번호를 0에서 5로 변경
+    {food_name}{숫자}.txt 파일들의 클래스 번호를 0에서 5로 변경
     """
     
     # 경로 존재 확인
@@ -13,13 +15,13 @@ def change_hamburger_labels(labels_path='data/food_image/labels/val'):
     
     changed_files = 0
     total_lines_changed = 0
-    total_hamburger_files = 0
+    total_food_files = 0
     
     # 디렉토리 내의 모든 파일에 대해 반복
     for filename in os.listdir(labels_path):
-        # hamburger로 시작하고 .txt로 끝나는 파일만 처리
-        if filename.startswith('hamburger') and filename.endswith('.txt'):
-            total_hamburger_files += 1
+        # {food_name}으로 시작하고 .txt로 끝나는 파일만 처리
+        if filename.startswith(food_name) and filename.endswith('.txt'):
+            total_food_files += 1
             filepath = os.path.join(labels_path, filename)
             
             # 파일 읽기
@@ -33,7 +35,7 @@ def change_hamburger_labels(labels_path='data/food_image/labels/val'):
                 if lines[i].strip():  # 빈 줄이 아닌 경우
                     parts = lines[i].strip().split()
                     if parts :
-                        parts[0] = '5'
+                        parts[0] = '35'
                         lines[i] = ' '.join(parts) + '\n'
                         lines_changed_in_file += 1
             
@@ -49,9 +51,9 @@ def change_hamburger_labels(labels_path='data/food_image/labels/val'):
                 print(f"{filename}: 변경할 내용 없음 (클래스 0이 없음)")
     
     print(f"\n변경 완료!")
-    print(f"전체 hamburger 파일 수: {total_hamburger_files}")
+    print(f"전체 {food_name} 파일 수: {total_food_files}")
     print(f"실제 변경된 파일 수: {changed_files}")
     print(f"총 변경된 라인 수: {total_lines_changed}")
 
 if __name__ == "__main__":
-    change_hamburger_labels()
+    change_food_labels()

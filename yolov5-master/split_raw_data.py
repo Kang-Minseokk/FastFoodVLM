@@ -12,7 +12,7 @@ for d in [train_image_dir, val_image_dir, train_label_dir, val_label_dir]:
     os.makedirs(d, exist_ok=True)
 
 # 분할할 음식의 이름을 작성해주세요
-dir_names = ["blueberry"]
+dir_names = ["bread"]
 
 # 이미지 및 라벨 파일 수집
 all_image_label_pairs = []

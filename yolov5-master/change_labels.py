@@ -1,7 +1,7 @@
 import os
 import re
 
-food_name = "blueberry"
+food_name = "bread"
 
 def change_food_labels(labels_path=f"./raw_data/{food_name}/labels"):
     """
@@ -35,7 +35,7 @@ def change_food_labels(labels_path=f"./raw_data/{food_name}/labels"):
                 if lines[i].strip():  # 빈 줄이 아닌 경우
                     parts = lines[i].strip().split()
                     if parts :
-                        parts[0] = '35'
+                        parts[0] = '18'
                         lines[i] = ' '.join(parts) + '\n'
                         lines_changed_in_file += 1
             

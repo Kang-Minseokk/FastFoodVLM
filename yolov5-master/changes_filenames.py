@@ -6,7 +6,7 @@ import shutil
 # 생성한 상태로 코드를 실행해야 합니다.
 
 # 데이터 증강 또는 새롭게 추가하려는 음식의 이름을 입력하세요!
-food_name = "blueberry"
+food_name = "cookies"
 
 os.chdir(f"./raw_data/{food_name}")
 
@@ -25,7 +25,7 @@ print(f"라벨 파일 개수: {txt_file_count}")
 # Create a copy of the image_files list before iterating
 image_files_copy = image_files[:]
 
-for idx, file_name in enumerate(image_files_copy, start=114):
+for idx, file_name in enumerate(image_files_copy, start=93):
     # 이미지 파일의 확장자를 추출합니다.
     img_ext = os.path.splitext(file_name)[1]
 

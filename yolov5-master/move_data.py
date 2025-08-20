@@ -2,7 +2,7 @@ import os
 import re
 from collections import Counter
 
-def analyze_food_dataset(train_path='data/food_image/images/val'):
+def analyze_food_dataset(train_path='data/food_image/images/train'):
     """
     음식 이미지 데이터셋 분석
     - 클래스 총 개수

@@ -13,6 +13,7 @@ utils/loggers/
 *.pyo
 *.pyd
 *.gz
+*.pt
 
 /food_data
 yolov5m.pt

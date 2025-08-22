@@ -1,7 +1,7 @@
 import os
 import re
 
-food_name = "bread"
+food_name = "salad"
 
 def change_food_labels(labels_path=f"./raw_data/{food_name}/labels"):
     """
@@ -20,7 +20,7 @@ def change_food_labels(labels_path=f"./raw_data/{food_name}/labels"):
     # 디렉토리 내의 모든 파일에 대해 반복
     for filename in os.listdir(labels_path):
         # {food_name}으로 시작하고 .txt로 끝나는 파일만 처리
-        if filename.startswith(food_name) and filename.endswith('.txt'):
+        if filename.startswith("salad") and filename.endswith('.txt'):
             total_food_files += 1
             filepath = os.path.join(labels_path, filename)
             
@@ -35,7 +35,7 @@ def change_food_labels(labels_path=f"./raw_data/{food_name}/labels"):
                 if lines[i].strip():  # 빈 줄이 아닌 경우
                     parts = lines[i].strip().split()
                     if parts :
-                        parts[0] = '18'
+                        parts[0] = '25'
                         lines[i] = ' '.join(parts) + '\n'
                         lines_changed_in_file += 1
             

@@ -6,7 +6,7 @@ import shutil
 # 생성한 상태로 코드를 실행해야 합니다.
 
 # 데이터 증강 또는 새롭게 추가하려는 음식의 이름을 입력하세요!
-food_name = "cookies"
+food_name = "salad"
 
 os.chdir(f"./raw_data/{food_name}")
 
@@ -25,15 +25,15 @@ print(f"라벨 파일 개수: {txt_file_count}")
 # Create a copy of the image_files list before iterating
 image_files_copy = image_files[:]
 
-for idx, file_name in enumerate(image_files_copy, start=93):
+for idx, file_name in enumerate(image_files_copy, start=90):
     # 이미지 파일의 확장자를 추출합니다.
-    img_ext = os.path.splitext(file_name)[1]
+    img_ext = os.path.splitext(file_name)[1].lower()
 
     # 이미지 파일과 동일한 이름의 라벨 파일이 있는지 확인합니다.
     label_file_name = os.path.splitext(file_name)[0] + '.txt'
     if label_file_name in label_files:
         # 새로운 파일 이름을 생성합니다. --> 바꾸고자하는 음식 클래스 이름으로 바꾸기
-        new_name = f"{food_name}{idx}"
+        new_name = f"salad{idx}"
 
         # 이미지 파일의 전체 경로
         old_img_path = os.path.join(image_path, file_name)

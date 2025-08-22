@@ -12,7 +12,7 @@ for d in [train_image_dir, val_image_dir, train_label_dir, val_label_dir]:
     os.makedirs(d, exist_ok=True)
 
 # 분할할 음식의 이름을 작성해주세요
-dir_names = ["bread"]
+dir_names = ["salad"]
 
 # 이미지 및 라벨 파일 수집
 all_image_label_pairs = []
@@ -22,7 +22,7 @@ for dir_name in dir_names:
     image_dir = os.path.join(parent_directory_path, dir_name, 'images')
     label_dir = os.path.join(parent_directory_path, dir_name, 'labels')
 
-    image_files = [f for f in os.listdir(image_dir) if f.endswith(('.jpg', '.png'))]
+    image_files = [f for f in os.listdir(image_dir) if f.endswith(('.jpg', '.png', 'JPG', 'PNG'))]
 
     for img_file in image_files:
         label_file = os.path.splitext(img_file)[0] + '.txt'
@@ -34,7 +34,7 @@ for dir_name in dir_names:
 # 데이터 셔플 및 분할
 random.seed(42)
 random.shuffle(all_image_label_pairs)
-split_idx = int(len(all_image_label_pairs) * 0.8)
+split_idx = int(len(all_image_label_pairs) * 0.95)
 train_pairs = all_image_label_pairs[:split_idx]
 val_pairs   = all_image_label_pairs[split_idx:]
 

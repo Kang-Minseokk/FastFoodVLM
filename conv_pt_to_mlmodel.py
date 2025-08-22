@@ -8,6 +8,6 @@ os.chdir("./yolov5-master")
 subprocess.run([
     "python", "export-coreml-nms.py",
     "--img-size", "640",
-    "--weights", "./runs/train/exp11/weights/best.pt",
+    "--weights", "./runs/train/exp17/weights/best.pt",
     "--include", "coreml"
 ])

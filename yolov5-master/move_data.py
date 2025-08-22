@@ -2,7 +2,7 @@ import os
 import re
 from collections import Counter
 
-def analyze_food_dataset(train_path='data/food_image/images/train'):
+def analyze_food_dataset(train_path='data/food_image/labels/train'):
     """
     음식 이미지 데이터셋 분석
     - 클래스 총 개수
@@ -19,8 +19,8 @@ def analyze_food_dataset(train_path='data/food_image/images/train'):
     image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
     
     # 모든 이미지 파일 가져오기
-    files = [f for f in os.listdir(train_path) if f.lower().endswith(image_extensions)]
-    
+    # files = [f for f in os.listdir(train_path) if f.lower().endswith(image_extensions)]
+    files = [f for f in os.listdir(train_path) if f.lower().endswith('txt')]
     # 음식 이름 추출하여 카운트
     food_counts = Counter()
     for file in files:

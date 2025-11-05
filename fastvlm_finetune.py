@@ -11,7 +11,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # =========================================================
 IMAGE_TOKEN_INDEX = -200
 DEVICE = "cuda"
-
+test_img = Image.open("dataset/cheesecake_test.jpeg").convert("RGB")
+test_img.save("debug_cheesecake.png")
 
 # =========================================================
 # (A) Load FastVLM
@@ -25,7 +26,7 @@ tokenizer = AutoTokenizer.from_pretrained(
 
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
-    torch_dtype=torch.float32,
+    torch_dtype=torch.bfloat16,
     trust_remote_code=True
 ).to(DEVICE)
 
@@ -101,7 +102,7 @@ class FoodImageDataset(Dataset):
         # ===== (1) image load
         pil_img = Image.open(img_path).convert("RGB")
         px = self.vision_processor(images=pil_img, return_tensors="pt")["pixel_values"][0]
-        px = px.to(torch.float32)
+        px = px.to(torch.bfloat16)
 
         # ===== (2) messages
         messages = [
@@ -186,37 +187,8 @@ loader = DataLoader(
 
 print(f"✅ Dataset size = {len(dataset)}")
 
-
 # =========================================================
-# (F) Training
-# =========================================================
-optimizer = AdamW(model.parameters(), lr=1e-4)
-
-model.train()
-for epoch in range(3):
-    for step, batch in enumerate(loader):
-        batch = {k: v.to(DEVICE) for k, v in batch.items()}
-
-        out = model(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
-            images=batch["pixel_values"],
-            labels=batch["labels"],
-        )
-
-        loss = out.loss
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
-        if step % 10 == 0:
-            print(f"[epoch {epoch}] step {step} loss = {loss.item():.4f}")
-
-print("✅ Training done!")
-
-
-# =========================================================
-# (G) Inference example
+# (F) Ablation Study
 # =========================================================
 def inject_image_token_simple(text):
     pre, post = text.split("<image>", 1)
@@ -225,10 +197,9 @@ def inject_image_token_simple(text):
     merged = pre_ids + [IMAGE_TOKEN_INDEX] + post_ids
     return torch.tensor([merged])
 
-
-test_img = Image.open("dataset/apple/apple1.jpg").convert("RGB")
+test_img = Image.open("dataset/cheesecake_test.jpeg").convert("RGB")
 px = vision_processor(images=test_img, return_tensors="pt")["pixel_values"].to(DEVICE)
-px = px.to(torch.float32)
+px = px.to(torch.bfloat16)
 
 infer_msg = [
     {"role": "user",
@@ -254,5 +225,76 @@ with torch.no_grad():
         do_sample=False
     )
 
-print("\n===== MODEL OUTPUT =====")
+print("\n===== General MODEL OUTPUT =====")
 print(tokenizer.decode(gen[0], skip_special_tokens=True).strip())
+
+# =========================================================
+# (G) Training
+# =========================================================
+optimizer = AdamW(model.parameters(), lr=1e-4)
+model.train()
+for epoch in range(1):
+    for step, batch in enumerate(loader):
+        batch = {k: v.to(DEVICE) for k, v in batch.items()}
+
+        out = model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            images=batch["pixel_values"],
+            labels=batch["labels"],
+        )
+
+        loss = out.loss
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        if step % 10 == 0:
+            print(f"[epoch {epoch}] step {step} loss = {loss.item():.4f}")
+
+print("✅ Training done!")
+
+
+# =========================================================
+# (H) Inference example
+# =========================================================
+print("After Fine-Tuning")
+test_img = Image.open("dataset/cheesecake_test.jpeg").convert("RGB")
+px = vision_processor(images=test_img, return_tensors="pt")["pixel_values"].to(DEVICE)
+px = px.to(torch.bfloat16)
+
+infer_msg = [
+    {"role": "user",
+     "content": "<image>\nAnswer ONLY with the food name in one or two English words. No extra text."}
+]
+
+infer_text = tokenizer.apply_chat_template(
+    infer_msg,
+    tokenize=False,
+    add_generation_prompt=True,
+)
+
+test_ids = inject_image_token_simple(infer_text).to(DEVICE)
+mask = torch.ones_like(test_ids).to(DEVICE)
+
+model.eval()
+with torch.no_grad():
+    gen = model.generate(
+        inputs=test_ids,
+        attention_mask=mask,
+        images=px,
+        max_new_tokens=8,
+        do_sample=False
+    )
+
+print("\n===== FineTuned MODEL OUTPUT =====")
+print(tokenizer.decode(gen[0], skip_special_tokens=True).strip())
+
+# =========================================================
+# (I) HuggingFace Upload
+# =========================================================
+merged = model.merge_and_unload()
+merged.save_pretrained("FastFoodVLM-0.5B")
+tokenizer.save_pretrained("FastFoodVLM-0.5B")
+
+print("Full merged model saved!")

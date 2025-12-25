@@ -233,7 +233,7 @@ print(tokenizer.decode(gen[0], skip_special_tokens=True).strip())
 # =========================================================
 optimizer = AdamW(model.parameters(), lr=1e-4)
 model.train()
-for epoch in range(1):
+for epoch in range(10):
     for step, batch in enumerate(loader):
         batch = {k: v.to(DEVICE) for k, v in batch.items()}
 

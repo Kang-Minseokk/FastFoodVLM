@@ -233,7 +233,12 @@ print(tokenizer.decode(gen[0], skip_special_tokens=True).strip())
 # =========================================================
 optimizer = AdamW(model.parameters(), lr=1e-4)
 model.train()
-for epoch in range(10):
+for epoch in range(50):
+    model.train()
+
+    epoch_loss_sum = 0.0
+    epoch_steps = 0
+
     for step, batch in enumerate(loader):
         batch = {k: v.to(DEVICE) for k, v in batch.items()}
 
@@ -249,8 +254,16 @@ for epoch in range(10):
         optimizer.step()
         optimizer.zero_grad()
 
+        # 에폭 평균용 누적
+        epoch_loss_sum += loss.item()
+        epoch_steps += 1
+
         if step % 10 == 0:
             print(f"[epoch {epoch}] step {step} loss = {loss.item():.4f}")
+
+    # 에폭 끝나고 평균 출력
+    epoch_avg_loss = epoch_loss_sum / max(1, epoch_steps)
+    print(f"[epoch {epoch}] avg_loss = {epoch_avg_loss:.4f}")
 
 print("✅ Training done!")
 

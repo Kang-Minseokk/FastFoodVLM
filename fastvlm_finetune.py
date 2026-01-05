@@ -42,8 +42,8 @@ print("✅ Model loaded + Vision Tower frozen")
 # (B) Apply LoRA
 # =========================================================
 lora_config = LoraConfig(
-    r=8,
-    lora_alpha=16,
+    r=16,
+    lora_alpha=32,
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     lora_dropout=0.05,
     bias="none",
@@ -227,6 +227,7 @@ with torch.no_grad():
 
 print("\n===== General MODEL OUTPUT =====")
 print(tokenizer.decode(gen[0], skip_special_tokens=True).strip())
+breakpoint()
 
 # =========================================================
 # (G) Training

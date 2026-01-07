@@ -42,8 +42,8 @@ print("✅ Model loaded + Vision Tower frozen")
 # (B) Apply LoRA
 # =========================================================
 lora_config = LoraConfig(
-    r=16,
-    lora_alpha=32,
+    r=8,
+    lora_alpha=16,
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     lora_dropout=0.05,
     bias="none",
@@ -63,6 +63,7 @@ class FoodImageDataset(Dataset):
         self.samples = []  # (img_path, food_name)
 
         for food_name in os.listdir(root_dir):
+            # breakpoint()
             food_dir = os.path.join(root_dir, food_name, "images")
             if not os.path.isdir(food_dir):
                 continue
@@ -227,7 +228,7 @@ with torch.no_grad():
 
 print("\n===== General MODEL OUTPUT =====")
 print(tokenizer.decode(gen[0], skip_special_tokens=True).strip())
-breakpoint()
+# breakpoint()
 
 # =========================================================
 # (G) Training

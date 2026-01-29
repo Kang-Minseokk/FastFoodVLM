@@ -198,6 +198,10 @@ def inject_image_token_simple(text):
     merged = pre_ids + [IMAGE_TOKEN_INDEX] + post_ids
     return torch.tensor([merged])
 
+print("tokenizer <image> id:", tokenizer.convert_tokens_to_ids("<image>"))
+print("model.config.image_token_index:", getattr(model.config, "image_token_index", None))
+breakpoint()
+
 test_img = Image.open("dataset/cheesecake_test.jpeg").convert("RGB")
 px = vision_processor(images=test_img, return_tensors="pt")["pixel_values"].to(DEVICE)
 px = px.to(torch.bfloat16)
@@ -235,7 +239,7 @@ print(tokenizer.decode(gen[0], skip_special_tokens=True).strip())
 # =========================================================
 optimizer = AdamW(model.parameters(), lr=1e-4)
 model.train()
-for epoch in range(50):
+for epoch in range(1):
     model.train()
 
     epoch_loss_sum = 0.0

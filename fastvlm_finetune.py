@@ -235,7 +235,7 @@ print(tokenizer.decode(gen[0], skip_special_tokens=True).strip())
 # =========================================================
 optimizer = AdamW(model.parameters(), lr=1e-4)
 model.train()
-for epoch in range(1):
+for epoch in range(20):
     model.train()
 
     epoch_loss_sum = 0.0

@@ -153,12 +153,14 @@ class FoodImageDataset(Dataset):
 # (D) collate_fn
 # =========================================================
 def collate_fn(batch):
+    pad_id = tokenizer.eos_token_id
+    
     input_ids = [b["input_ids"] for b in batch]
     labels = [b["labels"] for b in batch]
     masks = [b["attention_mask"] for b in batch]
     px = torch.stack([b["pixel_values"] for b in batch], dim=0)
 
-    input_ids = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=0)
+    input_ids = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=pad_id)
     labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=-100)
     masks = torch.nn.utils.rnn.pad_sequence(masks, batch_first=True, padding_value=0)
 
@@ -218,22 +220,27 @@ mask = torch.ones_like(test_ids).to(DEVICE)
 
 model.eval()
 with torch.no_grad():
+    im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
+    pad_id = tokenizer.eos_token_id
     gen = model.generate(
         inputs=test_ids,
         attention_mask=mask,
         images=px,
         max_new_tokens=8,
-        do_sample=False
+        do_sample=False,
+        eos_token_id=im_end_id,
+        pad_token_id=pad_id
     )
 
 print("\n===== General MODEL OUTPUT =====")
-print(tokenizer.decode(gen[0], skip_special_tokens=True).strip())
+new_tokens = gen[0, test_ids.shape[1]:]
+print(tokenizer.decode(new_tokens, skip_special_tokens=True).strip()) # 딱 생성된 녀석만 확인
 # breakpoint()
 
 # =========================================================
 # (G) Training
 # =========================================================
-optimizer = AdamW(model.parameters(), lr=1e-4)
+optimizer = AdamW((p for p in model.parameters() if p.requires_grad), lr=1e-4)
 model.train()
 for epoch in range(20):
     model.train()
@@ -294,12 +301,16 @@ mask = torch.ones_like(test_ids).to(DEVICE)
 
 model.eval()
 with torch.no_grad():
+    im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
+    pad_id = tokenizer.eos_token_id
     gen = model.generate(
         inputs=test_ids,
         attention_mask=mask,
         images=px,
         max_new_tokens=8,
-        do_sample=False
+        do_sample=False,
+        eos_token_id=im_end_id,
+        pad_token_id=pad_id
     )
 
 print("\n===== FineTuned MODEL OUTPUT =====")

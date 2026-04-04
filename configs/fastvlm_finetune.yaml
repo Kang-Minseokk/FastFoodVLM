@@ -1,0 +1,6 @@
+model_name: "apple/FastVLM-0.5B"
+learning_rate: 1e-3
+batch_size: 8
+epochs: 3
+weight_decay: 0.01
+optimizer: Adam

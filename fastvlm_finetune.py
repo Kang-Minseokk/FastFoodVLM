@@ -86,23 +86,36 @@ model = get_peft_model(model, lora_config)
 #       PEFT가 get_peft_model 시 모든 base model 파라미터를 freeze하므로
 #       반드시 이후에 unfreeze 해야 효과가 있음
 # =========================================================
-projector = None
-for attr in ["multi_modal_projector", "model.multi_modal_projector"]:
-    try:
-        obj = model
-        for part in attr.split("."):
-            obj = getattr(obj, part)
-        projector = obj
-        break
-    except AttributeError:
-        continue
+PROJECTOR_KEYWORDS = ["mm_projector", "multi_modal_projector", "projector", "connector", "mm_proj"]
 
-if projector is not None:
-    for p in projector.parameters():
-        p.requires_grad = True
-    print("✅ mm_projector unfrozen")
-else:
-    print("⚠️  mm_projector를 찾지 못했습니다. 구조를 확인하세요.")
+def find_and_unfreeze_projector(model):
+    unfrozen = []
+    seen = set()
+
+    for name, module in model.named_modules():
+        name_lower = name.lower()
+        # projector 관련 키워드를 포함하고 depth가 적절한 모듈만 (하위 레이어 중복 방지)
+        if any(kw in name_lower for kw in PROJECTOR_KEYWORDS) and len(name.split(".")) <= 5:
+            # 이미 상위 모듈을 처리했으면 하위 모듈은 skip
+            if any(name.startswith(seen_name + ".") for seen_name in seen):
+                continue
+            for p in module.parameters():
+                p.requires_grad = True
+            seen.add(name)
+            unfrozen.append(name)
+
+    if unfrozen:
+        for n in unfrozen:
+            print(f"✅ mm_projector unfrozen: {n}")
+    else:
+        print("⚠️  projector를 찾지 못했습니다. 아래 모듈 목록을 확인하세요:")
+        for name, _ in model.named_modules():
+            if len(name.split(".")) <= 3:
+                print(f"   {name}")
+
+    return len(unfrozen) > 0
+
+find_and_unfreeze_projector(model)
 
 # =========================================================
 # (B-2) Vision Tower 부분 unfreeze (선택, PEFT 적용 후)

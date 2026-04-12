@@ -261,7 +261,12 @@ sampler = WeightedRandomSampler(sample_weights, num_samples=len(train_samples), 
 train_dataset = FoodImageDataset(tokenizer, vision_processor, train_samples, augment=True)
 val_dataset = FoodImageDataset(tokenizer, vision_processor, val_samples, augment=False)
 
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, sampler=sampler, collate_fn=collate_fn)
+train_loader = DataLoader(train_dataset, 
+                          batch_size=BATCH_SIZE, 
+                          sampler=sampler, 
+                          collate_fn=collate_fn,
+                          num_workers=8, pin_memory=True
+                          )
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn)
 
 print(f"✅ Dataset: train={len(train_dataset)}, val={len(val_dataset)}, classes={len(class_to_samples)}")
@@ -336,7 +341,8 @@ for epoch in range(EPOCHS):
     epoch_steps = 0
 
     for step, batch in enumerate(train_loader):
-        batch = {k: v.to(DEVICE) for k, v in batch.items()}
+        # batch = {k: v.to(DEVICE) for k, v in batch.items()}
+        batch = {k: v.to(DEVICE, non_blocking=True) for k, v in batch.items()}
 
         out = model(
             input_ids=batch["input_ids"],
@@ -366,7 +372,8 @@ for epoch in range(EPOCHS):
     val_steps = 0
     with torch.no_grad():
         for batch in val_loader:
-            batch = {k: v.to(DEVICE) for k, v in batch.items()}
+            # batch = {k: v.to(DEVICE) for k, v in batch.items()}
+            batch = {k: v.to(DEVICE, non_blocking=True) for k, v in batch.items()}
             out = model(
                 input_ids=batch["input_ids"],
                 attention_mask=batch["attention_mask"],

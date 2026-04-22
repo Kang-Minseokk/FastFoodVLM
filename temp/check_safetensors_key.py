@@ -1,3 +1,7 @@
+# safetensors 파일의 키 이름을 확인할 때 사용하는 코드입니다.
+# 이전에 한참 오류가 발생했었던 부분인데, mm_project라는 키워드가 앞에 붙어있어서 발생하던 오류를 
+# 해결하기 위한 코드였습니다. 🥹
+
 from safetensors.torch import load_file
 
 orig = load_file("./fastvithd/model.safetensors")

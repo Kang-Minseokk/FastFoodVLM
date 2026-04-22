@@ -1,0 +1,28 @@
+base:
+  model_name: "apple/FastVLM-0.5B"
+  device: "cuda"
+  seed: 42
+  image_token_index: -200
+  dataset_root: "dataset"
+  test_image_path: "debug_cheesecake.png"
+  save_dir: "FastFoodVLM-0.5B"
+  best_ckpt_dir: "checkpoints/best"
+  image_extensions:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".webp"
+    - ".bmp"
+    - ".tif"
+    - ".tiff"
+
+train:
+  epochs: 20
+  batch_size: 4
+  lr: 1.0e-4
+  grad_clip: 1.0
+  val_split: 0.1
+  lora_rank: 32
+  lora_alpha: 64
+  lora_dropout: 0.05
+  unfreeze_vision_blocks: 0

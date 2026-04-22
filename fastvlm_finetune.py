@@ -9,30 +9,12 @@ from torch.optim import AdamW
 from torchvision import transforms
 from peft import get_peft_model, LoraConfig, TaskType
 from transformers import AutoModelForCausalLM, AutoTokenizer, get_cosine_schedule_with_warmup
+from config.config import load_config
 
 # =========================================================
 # Config
 # =========================================================
-IMAGE_TOKEN_INDEX = -200
-DEVICE = "cuda"
-SEED = 42
-DATASET_ROOT = "dataset"
-TEST_IMAGE_PATH = "debug_cheesecake.png"
-
-EPOCHS = 20
-BATCH_SIZE = 4
-LR = 1e-4
-GRAD_CLIP = 1.0
-VAL_SPLIT = 0.1
-LORA_RANK = 32
-LORA_ALPHA = 64
-SAVE_DIR = "FastFoodVLM-0.5B"
-BEST_CKPT_DIR = "checkpoints/best"
-
-# Vision Tower 마지막 N개 블록 unfreeze. 메모리 부족 시 0으로 설정
-UNFREEZE_VISION_BLOCKS = 0
-
-IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff")
+cfg = load_config("configs/first_config.yaml")
 
 # 재현성
 random.seed(SEED)
@@ -44,7 +26,7 @@ if torch.cuda.is_available():
 # =========================================================
 # (A) Load FastVLM
 # =========================================================
-model_name = "apple/FastVLM-0.5B"
+model_name = _base["model_name"]
 
 tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
@@ -74,7 +56,7 @@ lora_config = LoraConfig(
         "q_proj", "k_proj", "v_proj", "o_proj",  # attention
         "gate_proj", "up_proj", "down_proj",       # MLP (기존에 누락됨)
     ],
-    lora_dropout=0.05,
+    lora_dropout=_train["lora_dropout"],
     bias="none",
     task_type=TaskType.CAUSAL_LM,
 )

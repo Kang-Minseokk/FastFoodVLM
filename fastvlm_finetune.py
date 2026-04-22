@@ -2,13 +2,12 @@ import os
 import random
 import numpy as np
 import torch
-from torch.optim import AdamW
 from peft import get_peft_model, LoraConfig, TaskType
-from transformers import get_cosine_schedule_with_warmup
 from config.config import load_config
 from model_base.build_model import build_model, find_and_unfreeze_projector
 from data_utils.build_dataloader import build_dataloader
 from evaluate.evaluator import Evaluator
+from train.trainer import Trainer
 
 # =========================================================
 # Config
@@ -69,55 +68,15 @@ evaluator.test_sample("Before Fine-Tuning")
 
 
 # =========================================================
-# (G) Training
+# (E) Training
 # =========================================================
-total_steps = cfg['train']['epochs'] * len(train_loader)
-warmup_steps = len(train_loader)
-
-optimizer = AdamW(
-    [p for p in model.parameters() if p.requires_grad],
-    lr=cfg['train']['lr'],
-    weight_decay=0.01,
-)
-scheduler = get_cosine_schedule_with_warmup(
-    optimizer,
-    num_warmup_steps=warmup_steps,
-    num_training_steps=total_steps,
-)
+trainer = Trainer(model, train_loader, cfg)
 
 os.makedirs(cfg['base']['best_ckpt_dir'], exist_ok=True)
 best_val_loss = float("inf")
 
 for epoch in range(cfg['train']['epochs']):
-    model.train()
-    epoch_loss_sum = 0.0
-    epoch_steps = 0
-
-    for step, batch in enumerate(train_loader):
-        batch = {k: v.to(cfg['base']['device'], non_blocking=True) for k, v in batch.items()}
-
-        out = model(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
-            images=batch["pixel_values"],
-            labels=batch["labels"],
-        )
-        loss = out.loss
-        loss.backward()
-
-        torch.nn.utils.clip_grad_norm_(model.parameters(), cfg['train']['grad_clip'])
-        optimizer.step()
-        scheduler.step()
-        optimizer.zero_grad()
-
-        epoch_loss_sum += loss.item()
-        epoch_steps += 1
-
-        if step % 10 == 0:
-            print(f"[epoch {epoch+1}/{cfg['train']['epochs']}] step {step}  loss={loss.item():.4f}  lr={scheduler.get_last_lr()[0]:.2e}")
-
-    epoch_avg_loss = epoch_loss_sum / max(1, epoch_steps)
-
+    epoch_avg_loss = trainer.train_one_epoch(train_loader, epoch)
     val_avg_loss = evaluator.evaluate(val_loader)
 
     print(f"[epoch {epoch+1}/{cfg['train']['epochs']}] train_loss={epoch_avg_loss:.4f}  val_loss={val_avg_loss:.4f}")

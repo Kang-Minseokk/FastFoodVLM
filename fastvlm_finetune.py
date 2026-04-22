@@ -8,7 +8,7 @@ from transformers import get_cosine_schedule_with_warmup
 from config.config import load_config
 from model_base.build_model import build_model, find_and_unfreeze_projector
 from data_utils.build_dataloader import build_dataloader
-from utils.inference_tester import test_before_finetune, test_after_finetune
+from evaluate.evaluator import Evaluator
 
 # =========================================================
 # Config
@@ -62,9 +62,10 @@ train_loader, val_loader, class_to_samples = build_dataloader(cfg, tokenizer, vi
 
 
 # =========================================================
-# (D) Inference Test (Before) - Lets see result before ft! 
+# (D) Evaluator
 # =========================================================
-test_before_finetune(model, tokenizer, vision_processor, cfg)
+evaluator = Evaluator(model, tokenizer, vision_processor, cfg)
+evaluator.test_sample("Before Fine-Tuning")
 
 
 # =========================================================
@@ -117,22 +118,7 @@ for epoch in range(cfg['train']['epochs']):
 
     epoch_avg_loss = epoch_loss_sum / max(1, epoch_steps)
 
-    # Validation
-    model.eval()
-    val_loss_sum = 0.0
-    val_steps = 0
-    with torch.no_grad():
-        for batch in val_loader:
-            batch = {k: v.to(cfg['base']['device'], non_blocking=True) for k, v in batch.items()}
-            out = model(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                images=batch["pixel_values"],
-                labels=batch["labels"],
-            )
-            val_loss_sum += out.loss.item()
-            val_steps += 1
-    val_avg_loss = val_loss_sum / max(1, val_steps)
+    val_avg_loss = evaluator.evaluate(val_loader)
 
     print(f"[epoch {epoch+1}/{cfg['train']['epochs']}] train_loss={epoch_avg_loss:.4f}  val_loss={val_avg_loss:.4f}")
 
@@ -148,7 +134,7 @@ print("✅ Training done!")
 # =========================================================
 # (H) Inference Test (After)
 # =========================================================
-test_after_finetune(model, tokenizer, vision_processor, cfg)
+evaluator.test_sample("After Fine-Tuning")
 
 
 # =========================================================

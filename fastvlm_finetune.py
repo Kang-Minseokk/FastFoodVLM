@@ -85,7 +85,7 @@ for epoch in range(cfg['train']['epochs']):
         best_val_loss = val_avg_loss
         model.save_pretrained(cfg['base']['best_ckpt_dir'])
         tokenizer.save_pretrained(cfg['base']['best_ckpt_dir'])
-        print(f"  ✅ Best model saved (val_loss={best_val_loss:.4f})")
+        print(f"✅ Best model saved (val_loss={best_val_loss:.4f})")
 
 print("✅ Training done!")
 

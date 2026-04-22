@@ -17,29 +17,26 @@ from config.config import load_config
 cfg = load_config("configs/first_config.yaml")
 
 # 재현성
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
+random.seed(cfg['base']['seed'])
+np.random.seed(cfg['base']['seed'])
+torch.manual_seed(cfg['base']['seed'])
 if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(SEED)
+    torch.cuda.manual_seed_all(cfg['base']['seed'])
 
 # =========================================================
 # (A) Load FastVLM
 # =========================================================
-model_name = _base["model_name"]
-
-tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained(cfg['base']['model_name'], trust_remote_code=True)
 
 model = AutoModelForCausalLM.from_pretrained(
-    model_name,
+    cfg['base']['model_name'],
     torch_dtype=torch.bfloat16,
     trust_remote_code=True,
-).to(DEVICE)
+).to(cfg['base']['device'])
 
 vision_processor = model.get_vision_tower().image_processor
 vision_tower = model.get_vision_tower()
 
-# Vision Tower 전체 freeze
 for p in vision_tower.parameters():
     p.requires_grad = False
 
@@ -47,16 +44,15 @@ print("✅ Model loaded + Vision Tower frozen")
 
 # =========================================================
 # (B) Apply LoRA
-#     Attention + MLP 모두 포함, rank 32로 확장
 # =========================================================
 lora_config = LoraConfig(
-    r=LORA_RANK,
-    lora_alpha=LORA_ALPHA,
+    r=cfg['train']['lora_rank'],
+    lora_alpha=cfg['train']['lora_alpha'],
     target_modules=[
-        "q_proj", "k_proj", "v_proj", "o_proj",  # attention
-        "gate_proj", "up_proj", "down_proj",       # MLP (기존에 누락됨)
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj",
     ],
-    lora_dropout=_train["lora_dropout"],
+    lora_dropout=cfg['train']['lora_dropout'],
     bias="none",
     task_type=TaskType.CAUSAL_LM,
 )
@@ -65,8 +61,6 @@ model = get_peft_model(model, lora_config)
 
 # =========================================================
 # (B-1) mm_projector unfreeze (PEFT 적용 후에 해야 함)
-#       PEFT가 get_peft_model 시 모든 base model 파라미터를 freeze하므로
-#       반드시 이후에 unfreeze 해야 효과가 있음
 # =========================================================
 PROJECTOR_KEYWORDS = ["mm_projector", "multi_modal_projector", "projector", "connector", "mm_proj"]
 
@@ -76,9 +70,7 @@ def find_and_unfreeze_projector(model):
 
     for name, module in model.named_modules():
         name_lower = name.lower()
-        # projector 관련 키워드를 포함하고 depth가 적절한 모듈만 (하위 레이어 중복 방지)
         if any(kw in name_lower for kw in PROJECTOR_KEYWORDS) and len(name.split(".")) <= 5:
-            # 이미 상위 모듈을 처리했으면 하위 모듈은 skip
             if any(name.startswith(seen_name + ".") for seen_name in seen):
                 continue
             for p in module.parameters():
@@ -101,15 +93,14 @@ find_and_unfreeze_projector(model)
 
 # =========================================================
 # (B-2) Vision Tower 부분 unfreeze (선택, PEFT 적용 후)
-#       UNFREEZE_VISION_BLOCKS > 0 일 때만 적용
 # =========================================================
-if UNFREEZE_VISION_BLOCKS > 0:
+if cfg['train']['unfreeze_vision_blocks'] > 0:
     try:
         vit_layers = list(vision_tower.vision_model.encoder.layers)
-        for layer in vit_layers[-UNFREEZE_VISION_BLOCKS:]:
+        for layer in vit_layers[-cfg['train']['unfreeze_vision_blocks']:]:
             for p in layer.parameters():
                 p.requires_grad = True
-        print(f"✅ Vision Tower 마지막 {UNFREEZE_VISION_BLOCKS}개 블록 unfrozen")
+        print(f"✅ Vision Tower 마지막 {cfg['train']['unfreeze_vision_blocks']}개 블록 unfrozen")
     except Exception as e:
         print(f"⚠️  Vision Tower unfreeze 실패: {e}")
 
@@ -131,13 +122,15 @@ class FoodImageDataset(Dataset):
     def __init__(self, tokenizer, vision_processor, samples, augment=False):
         self.tokenizer = tokenizer
         self.vision_processor = vision_processor
-        self.samples = samples  # list of (img_path, food_name)
+        self.samples = samples
         self.augment = augment
 
     def __len__(self):
         return len(self.samples)
 
-    def inject_image_token(self, text, image_token_id=IMAGE_TOKEN_INDEX):
+    def inject_image_token(self, text, image_token_id=None):
+        if image_token_id is None:
+            image_token_id = cfg['base']['image_token_index']
         if "<image>" not in text:
             raise ValueError("Prompt must contain <image> placeholder.")
         pre, post = text.split("<image>", 1)
@@ -148,17 +141,14 @@ class FoodImageDataset(Dataset):
     def __getitem__(self, idx):
         img_path, food_name = self.samples[idx]
 
-        # (1) Image + optional augmentation
         pil_img = Image.open(img_path).convert("RGB")
         if self.augment:
             pil_img = train_augment(pil_img)
         px = self.vision_processor(images=pil_img, return_tensors="pt")["pixel_values"][0]
         px = px.to(torch.bfloat16)
 
-        # food_name 정규화: 폴더명 언더스코어/하이픈 → 공백
         food_label = food_name.replace("_", " ").replace("-", " ")
 
-        # (2) Chat template
         messages = [
             {
                 "role": "user",
@@ -173,18 +163,16 @@ class FoodImageDataset(Dataset):
             messages, tokenize=False, add_generation_prompt=False
         )
 
-        # (3) input_ids
         input_ids = self.inject_image_token(chat_text)
         input_ids = torch.tensor(input_ids, dtype=torch.long)
 
-        # (4) Label masking: food_label 토큰만 학습
         answer_char_idx = chat_text.rindex(food_label)
         pre_answer_text = chat_text[:answer_char_idx]
         ans_start = len(self.inject_image_token(pre_answer_text))
 
         labels = input_ids.clone()
         labels[:ans_start] = -100
-        labels[labels == IMAGE_TOKEN_INDEX] = -100
+        labels[labels == cfg['base']['image_token_index']] = -100
 
         return {
             "input_ids": input_ids,
@@ -213,15 +201,14 @@ def collate_fn(batch):
 # (E) 샘플 수집 + Stratified train/val split
 # =========================================================
 all_samples = []
-for food_name in sorted(os.listdir(DATASET_ROOT)):
-    food_dir = os.path.join(DATASET_ROOT, food_name)
+for food_name in sorted(os.listdir(cfg['base']['dataset_root'])):
+    food_dir = os.path.join(cfg['base']['dataset_root'], food_name)
     if not os.path.isdir(food_dir):
         continue
     for file in os.listdir(food_dir):
-        if file.lower().endswith(IMAGE_EXTENSIONS):
+        if file.lower().endswith(tuple(cfg['base']['image_extensions'])):
             all_samples.append((os.path.join(food_dir, file), food_name))
 
-# 클래스별로 분리 후 split
 class_to_samples = defaultdict(list)
 for s in all_samples:
     class_to_samples[s[1]].append(s)
@@ -229,11 +216,10 @@ for s in all_samples:
 train_samples, val_samples = [], []
 for cls, samps in class_to_samples.items():
     random.shuffle(samps)
-    n_val = max(1, int(len(samps) * VAL_SPLIT))
+    n_val = max(1, int(len(samps) * cfg['train']['val_split']))
     val_samples.extend(samps[:n_val])
     train_samples.extend(samps[n_val:])
 
-# WeightedRandomSampler: 클래스 불균형 완화
 class_counts = defaultdict(int)
 for _, fname in train_samples:
     class_counts[fname] += 1
@@ -243,13 +229,12 @@ sampler = WeightedRandomSampler(sample_weights, num_samples=len(train_samples), 
 train_dataset = FoodImageDataset(tokenizer, vision_processor, train_samples, augment=True)
 val_dataset = FoodImageDataset(tokenizer, vision_processor, val_samples, augment=False)
 
-train_loader = DataLoader(train_dataset, 
-                          batch_size=BATCH_SIZE, 
-                          sampler=sampler, 
+train_loader = DataLoader(train_dataset,
+                          batch_size=cfg['train']['batch_size'],
+                          sampler=sampler,
                           collate_fn=collate_fn,
-                          num_workers=8, pin_memory=True
-                          )
-val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn)
+                          num_workers=8, pin_memory=True)
+val_loader = DataLoader(val_dataset, batch_size=cfg['train']['batch_size'], shuffle=False, collate_fn=collate_fn)
 
 print(f"✅ Dataset: train={len(train_dataset)}, val={len(val_dataset)}, classes={len(class_to_samples)}")
 
@@ -263,7 +248,7 @@ def run_inference(model, image_path):
         return None
 
     test_img = Image.open(image_path).convert("RGB")
-    px = vision_processor(images=test_img, return_tensors="pt")["pixel_values"].to(DEVICE, dtype=torch.bfloat16)
+    px = vision_processor(images=test_img, return_tensors="pt")["pixel_values"].to(cfg['base']['device'], dtype=torch.bfloat16)
 
     infer_msg = [{"role": "user", "content": "<image>\nAnswer ONLY with the food name in one or two English words. No extra text."}]
     infer_text = tokenizer.apply_chat_template(infer_msg, tokenize=False, add_generation_prompt=True)
@@ -271,7 +256,7 @@ def run_inference(model, image_path):
     pre, post = infer_text.split("<image>", 1)
     pre_ids = tokenizer(pre, add_special_tokens=False).input_ids
     post_ids = tokenizer(post, add_special_tokens=False).input_ids
-    test_ids = torch.tensor([pre_ids + [IMAGE_TOKEN_INDEX] + post_ids]).to(DEVICE)
+    test_ids = torch.tensor([pre_ids + [cfg['base']['image_token_index']] + post_ids]).to(cfg['base']['device'])
     mask = torch.ones_like(test_ids)
 
     model.eval()
@@ -286,13 +271,12 @@ def run_inference(model, image_path):
             eos_token_id=im_end_id,
             pad_token_id=tokenizer.eos_token_id,
         )
-    # 새로 생성된 토큰만 디코딩 (입력 제외)
     new_tokens = gen[0, test_ids.shape[1]:]
     return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
 print("\n===== Before Fine-Tuning =====")
-result_before = run_inference(model, TEST_IMAGE_PATH)
+result_before = run_inference(model, cfg['base']['test_image_path'])
 if result_before is not None:
     print(result_before)
 
@@ -300,12 +284,12 @@ if result_before is not None:
 # =========================================================
 # (G) Training
 # =========================================================
-total_steps = EPOCHS * len(train_loader)
-warmup_steps = len(train_loader)  # 1 epoch warmup
+total_steps = cfg['train']['epochs'] * len(train_loader)
+warmup_steps = len(train_loader)
 
 optimizer = AdamW(
     [p for p in model.parameters() if p.requires_grad],
-    lr=LR,
+    lr=cfg['train']['lr'],
     weight_decay=0.01,
 )
 scheduler = get_cosine_schedule_with_warmup(
@@ -314,17 +298,16 @@ scheduler = get_cosine_schedule_with_warmup(
     num_training_steps=total_steps,
 )
 
-os.makedirs(BEST_CKPT_DIR, exist_ok=True)
+os.makedirs(cfg['base']['best_ckpt_dir'], exist_ok=True)
 best_val_loss = float("inf")
 
-for epoch in range(EPOCHS):
+for epoch in range(cfg['train']['epochs']):
     model.train()
     epoch_loss_sum = 0.0
     epoch_steps = 0
 
     for step, batch in enumerate(train_loader):
-        # batch = {k: v.to(DEVICE) for k, v in batch.items()}
-        batch = {k: v.to(DEVICE, non_blocking=True) for k, v in batch.items()}
+        batch = {k: v.to(cfg['base']['device'], non_blocking=True) for k, v in batch.items()}
 
         out = model(
             input_ids=batch["input_ids"],
@@ -335,7 +318,7 @@ for epoch in range(EPOCHS):
         loss = out.loss
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), cfg['train']['grad_clip'])
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -344,7 +327,7 @@ for epoch in range(EPOCHS):
         epoch_steps += 1
 
         if step % 10 == 0:
-            print(f"[epoch {epoch+1}/{EPOCHS}] step {step}  loss={loss.item():.4f}  lr={scheduler.get_last_lr()[0]:.2e}")
+            print(f"[epoch {epoch+1}/{cfg['train']['epochs']}] step {step}  loss={loss.item():.4f}  lr={scheduler.get_last_lr()[0]:.2e}")
 
     epoch_avg_loss = epoch_loss_sum / max(1, epoch_steps)
 
@@ -354,8 +337,7 @@ for epoch in range(EPOCHS):
     val_steps = 0
     with torch.no_grad():
         for batch in val_loader:
-            # batch = {k: v.to(DEVICE) for k, v in batch.items()}
-            batch = {k: v.to(DEVICE, non_blocking=True) for k, v in batch.items()}
+            batch = {k: v.to(cfg['base']['device'], non_blocking=True) for k, v in batch.items()}
             out = model(
                 input_ids=batch["input_ids"],
                 attention_mask=batch["attention_mask"],
@@ -366,13 +348,12 @@ for epoch in range(EPOCHS):
             val_steps += 1
     val_avg_loss = val_loss_sum / max(1, val_steps)
 
-    print(f"[epoch {epoch+1}/{EPOCHS}] train_loss={epoch_avg_loss:.4f}  val_loss={val_avg_loss:.4f}")
+    print(f"[epoch {epoch+1}/{cfg['train']['epochs']}] train_loss={epoch_avg_loss:.4f}  val_loss={val_avg_loss:.4f}")
 
-    # Best checkpoint 저장 (val_loss 기준)
     if val_avg_loss < best_val_loss:
         best_val_loss = val_avg_loss
-        model.save_pretrained(BEST_CKPT_DIR)
-        tokenizer.save_pretrained(BEST_CKPT_DIR)
+        model.save_pretrained(cfg['base']['best_ckpt_dir'])
+        tokenizer.save_pretrained(cfg['base']['best_ckpt_dir'])
         print(f"  ✅ Best model saved (val_loss={best_val_loss:.4f})")
 
 print("✅ Training done!")
@@ -382,17 +363,16 @@ print("✅ Training done!")
 # (H) Inference after fine-tuning
 # =========================================================
 print("\n===== After Fine-Tuning =====")
-result_after = run_inference(model, TEST_IMAGE_PATH)
+result_after = run_inference(model, cfg['base']['test_image_path'])
 if result_after is not None:
     print(result_after)
 
 
 # =========================================================
 # (I) Merge & Save (최종 모델)
-#     Best checkpoint는 checkpoints/best/ 에 별도 저장되어 있음
 # =========================================================
 merged = model.merge_and_unload()
-merged.save_pretrained(SAVE_DIR)
-tokenizer.save_pretrained(SAVE_DIR)
-print(f"✅ Merged model saved to ./{SAVE_DIR}/")
-print(f"   Best checkpoint (lowest val_loss): ./{BEST_CKPT_DIR}/")
+merged.save_pretrained(cfg['base']['save_dir'])
+tokenizer.save_pretrained(cfg['base']['save_dir'])
+print(f"✅ Merged model saved to ./{cfg['base']['save_dir']}/")
+print(f"   Best checkpoint (lowest val_loss): ./{cfg['base']['best_ckpt_dir']}/")

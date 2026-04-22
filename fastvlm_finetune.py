@@ -8,8 +8,9 @@ from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from torch.optim import AdamW
 from torchvision import transforms
 from peft import get_peft_model, LoraConfig, TaskType
-from transformers import AutoModelForCausalLM, AutoTokenizer, get_cosine_schedule_with_warmup
+from transformers import get_cosine_schedule_with_warmup
 from config.config import load_config
+from model_base.build_model import build_model
 
 # =========================================================
 # Config
@@ -26,21 +27,7 @@ if torch.cuda.is_available():
 # =========================================================
 # (A) Load FastVLM
 # =========================================================
-tokenizer = AutoTokenizer.from_pretrained(cfg['base']['model_name'], trust_remote_code=True)
-
-model = AutoModelForCausalLM.from_pretrained(
-    cfg['base']['model_name'],
-    torch_dtype=torch.bfloat16,
-    trust_remote_code=True,
-).to(cfg['base']['device'])
-
-vision_processor = model.get_vision_tower().image_processor
-vision_tower = model.get_vision_tower()
-
-for p in vision_tower.parameters():
-    p.requires_grad = False
-
-print("✅ Model loaded + Vision Tower frozen")
+model, tokenizer, vision_processor, vision_tower = build_model(cfg)
 
 # =========================================================
 # (B) Apply LoRA

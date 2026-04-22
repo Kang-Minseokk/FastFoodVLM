@@ -32,7 +32,7 @@ def build_model(cfg):
 
     print("✅ Model loaded + Vision Tower frozen")
 
-    return model, tokenizer, vision_processor, vision_tower
+    return model, tokenizer, vision_processor
 
 
 PROJECTOR_KEYWORDS = ["mm_projector", "multi_modal_projector", "projector", "connector", "mm_proj"]

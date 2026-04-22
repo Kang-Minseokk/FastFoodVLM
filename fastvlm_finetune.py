@@ -3,11 +3,12 @@ import random
 import numpy as np
 import torch
 from peft import get_peft_model, LoraConfig, TaskType
-from config.config import load_config
+from utils.config import load_config
 from model_base.build_model import build_model, find_and_unfreeze_projector
 from data_utils.build_dataloader import build_dataloader
-from evaluate.evaluator import Evaluator
-from train.trainer import Trainer
+from utils.evaluator import Evaluator
+from utils.trainer import Trainer
+from utils.saver import merge_and_save
 
 # =========================================================
 # Config
@@ -25,7 +26,7 @@ if torch.cuda.is_available():
 # =========================================================
 # (A) Load FastVLM
 # =========================================================
-model, tokenizer, vision_processor, vision_tower = build_model(cfg)
+model, tokenizer, vision_processor = build_model(cfg)
 
 
 # =========================================================
@@ -57,7 +58,7 @@ print("✅ LoRA applied")
 # =========================================================
 # (C) Dataset
 # =========================================================
-train_loader, val_loader, class_to_samples = build_dataloader(cfg, tokenizer, vision_processor)
+train_loader, val_loader, _ = build_dataloader(cfg, tokenizer, vision_processor)
 
 
 # =========================================================
@@ -91,16 +92,12 @@ print("✅ Training done!")
 
 
 # =========================================================
-# (H) Inference Test (After)
+# (F) Inference Test (After)
 # =========================================================
 evaluator.test_sample("After Fine-Tuning")
 
 
 # =========================================================
-# (I) Merge & Save (최종 모델)
+# (G) Merge & Save
 # =========================================================
-merged = model.merge_and_unload()
-merged.save_pretrained(cfg['base']['save_dir'])
-tokenizer.save_pretrained(cfg['base']['save_dir'])
-print(f"✅ Merged model saved to ./{cfg['base']['save_dir']}/")
-print(f"   Best checkpoint (lowest val_loss): ./{cfg['base']['best_ckpt_dir']}/")
+merge_and_save(model, tokenizer, cfg)

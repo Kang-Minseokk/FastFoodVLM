@@ -48,6 +48,6 @@ def build_dataloader(cfg, tokenizer, vision_processor):
                             shuffle=False,
                             collate_fn=_collate_fn)
 
-    print(f"✅ Dataset: train={len(train_dataset)}, val={len(val_dataset)}, classes={len(class_to_samples)}")
+    print(f"✅ Dataset: train={len(train_dataset)}, val={len(val_dataset)}, classes={len(class_counts)}")
 
-    return train_loader, val_loader, class_to_samples
+    return train_loader, val_loader

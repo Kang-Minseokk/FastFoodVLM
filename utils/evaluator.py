@@ -1,5 +1,5 @@
 import torch
-from inference.run_infer import run_inference
+from utils.run_infer import run_inference
 
 
 class Evaluator:

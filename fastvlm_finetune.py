@@ -8,6 +8,7 @@ from transformers import get_cosine_schedule_with_warmup
 from config.config import load_config
 from model_base.build_model import build_model, find_and_unfreeze_projector
 from data_utils.build_dataloader import build_dataloader
+from utils.inference_tester import test_before_finetune, test_after_finetune
 
 # =========================================================
 # Config
@@ -61,45 +62,9 @@ train_loader, val_loader, class_to_samples = build_dataloader(cfg, tokenizer, vi
 
 
 # =========================================================
-# (F) Inference 함수 (before/after 공용)
+# (D) Inference Test (Before) - Lets see result before ft! 
 # =========================================================
-def run_inference(model, image_path):
-    if not os.path.exists(image_path):
-        print(f"⚠️  테스트 이미지 없음: {image_path}")
-        return None
-
-    test_img = Image.open(image_path).convert("RGB")
-    px = vision_processor(images=test_img, return_tensors="pt")["pixel_values"].to(cfg['base']['device'], dtype=torch.bfloat16)
-
-    infer_msg = [{"role": "user", "content": "<image>\nAnswer ONLY with the food name in one or two English words. No extra text."}]
-    infer_text = tokenizer.apply_chat_template(infer_msg, tokenize=False, add_generation_prompt=True)
-
-    pre, post = infer_text.split("<image>", 1)
-    pre_ids = tokenizer(pre, add_special_tokens=False).input_ids
-    post_ids = tokenizer(post, add_special_tokens=False).input_ids
-    test_ids = torch.tensor([pre_ids + [cfg['base']['image_token_index']] + post_ids]).to(cfg['base']['device'])
-    mask = torch.ones_like(test_ids)
-
-    model.eval()
-    with torch.no_grad():
-        im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
-        gen = model.generate(
-            inputs=test_ids,
-            attention_mask=mask,
-            images=px,
-            max_new_tokens=8,
-            do_sample=False,
-            eos_token_id=im_end_id,
-            pad_token_id=tokenizer.eos_token_id,
-        )
-    new_tokens = gen[0, test_ids.shape[1]:]
-    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-
-
-print("\n===== Before Fine-Tuning =====")
-result_before = run_inference(model, cfg['base']['test_image_path'])
-if result_before is not None:
-    print(result_before)
+test_before_finetune(model, tokenizer, vision_processor, cfg)
 
 
 # =========================================================
@@ -181,12 +146,9 @@ print("✅ Training done!")
 
 
 # =========================================================
-# (H) Inference after fine-tuning
+# (H) Inference Test (After)
 # =========================================================
-print("\n===== After Fine-Tuning =====")
-result_after = run_inference(model, cfg['base']['test_image_path'])
-if result_after is not None:
-    print(result_after)
+test_after_finetune(model, tokenizer, vision_processor, cfg)
 
 
 # =========================================================

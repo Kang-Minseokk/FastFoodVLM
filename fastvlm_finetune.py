@@ -1,16 +1,13 @@
 import os
 import random
 import numpy as np
-from collections import defaultdict
-from PIL import Image
 import torch
-from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from torch.optim import AdamW
-from torchvision import transforms
 from peft import get_peft_model, LoraConfig, TaskType
 from transformers import get_cosine_schedule_with_warmup
 from config.config import load_config
 from model_base.build_model import build_model, find_and_unfreeze_projector
+from data_utils.build_dataloader import build_dataloader
 
 # =========================================================
 # Config
@@ -60,132 +57,7 @@ print("✅ LoRA applied")
 # =========================================================
 # (C) Dataset
 # =========================================================
-train_augment = transforms.Compose([
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(15),
-    transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2),
-])
-
-
-class FoodImageDataset(Dataset):
-    def __init__(self, tokenizer, vision_processor, samples, augment=False):
-        self.tokenizer = tokenizer
-        self.vision_processor = vision_processor
-        self.samples = samples
-        self.augment = augment
-
-    def __len__(self):
-        return len(self.samples)
-
-    def inject_image_token(self, text, image_token_id=None):
-        if image_token_id is None:
-            image_token_id = cfg['base']['image_token_index']
-        if "<image>" not in text:
-            raise ValueError("Prompt must contain <image> placeholder.")
-        pre, post = text.split("<image>", 1)
-        pre_ids = self.tokenizer(pre, add_special_tokens=False).input_ids
-        post_ids = self.tokenizer(post, add_special_tokens=False).input_ids
-        return pre_ids + [image_token_id] + post_ids
-
-    def __getitem__(self, idx):
-        img_path, food_name = self.samples[idx]
-
-        pil_img = Image.open(img_path).convert("RGB")
-        if self.augment:
-            pil_img = train_augment(pil_img)
-        px = self.vision_processor(images=pil_img, return_tensors="pt")["pixel_values"][0]
-        px = px.to(torch.bfloat16)
-
-        food_label = food_name.replace("_", " ").replace("-", " ")
-
-        messages = [
-            {
-                "role": "user",
-                "content": "<image>\nAnswer ONLY with the food name in one or two English words. No extra text."
-            },
-            {
-                "role": "assistant",
-                "content": food_label
-            }
-        ]
-        chat_text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False
-        )
-
-        input_ids = self.inject_image_token(chat_text)
-        input_ids = torch.tensor(input_ids, dtype=torch.long)
-
-        answer_char_idx = chat_text.rindex(food_label)
-        pre_answer_text = chat_text[:answer_char_idx]
-        ans_start = len(self.inject_image_token(pre_answer_text))
-
-        labels = input_ids.clone()
-        labels[:ans_start] = -100
-        labels[labels == cfg['base']['image_token_index']] = -100
-
-        return {
-            "input_ids": input_ids,
-            "labels": labels,
-            "attention_mask": torch.ones_like(input_ids),
-            "pixel_values": px,
-        }
-
-
-# =========================================================
-# (D) collate_fn
-# =========================================================
-def collate_fn(batch):
-    pad_id = tokenizer.eos_token_id
-    input_ids = torch.nn.utils.rnn.pad_sequence(
-        [b["input_ids"] for b in batch], batch_first=True, padding_value=pad_id)
-    labels = torch.nn.utils.rnn.pad_sequence(
-        [b["labels"] for b in batch], batch_first=True, padding_value=-100)
-    masks = torch.nn.utils.rnn.pad_sequence(
-        [b["attention_mask"] for b in batch], batch_first=True, padding_value=0)
-    px = torch.stack([b["pixel_values"] for b in batch], dim=0)
-    return {"input_ids": input_ids, "labels": labels, "attention_mask": masks, "pixel_values": px}
-
-
-# =========================================================
-# (E) 샘플 수집 + Stratified train/val split
-# =========================================================
-all_samples = []
-for food_name in sorted(os.listdir(cfg['base']['dataset_root'])):
-    food_dir = os.path.join(cfg['base']['dataset_root'], food_name)
-    if not os.path.isdir(food_dir):
-        continue
-    for file in os.listdir(food_dir):
-        if file.lower().endswith(tuple(cfg['base']['image_extensions'])):
-            all_samples.append((os.path.join(food_dir, file), food_name))
-
-class_to_samples = defaultdict(list)
-for s in all_samples:
-    class_to_samples[s[1]].append(s)
-
-train_samples, val_samples = [], []
-for cls, samps in class_to_samples.items():
-    random.shuffle(samps)
-    n_val = max(1, int(len(samps) * cfg['train']['val_split']))
-    val_samples.extend(samps[:n_val])
-    train_samples.extend(samps[n_val:])
-
-class_counts = defaultdict(int)
-for _, fname in train_samples:
-    class_counts[fname] += 1
-sample_weights = [1.0 / class_counts[fname] for _, fname in train_samples]
-sampler = WeightedRandomSampler(sample_weights, num_samples=len(train_samples), replacement=True)
-
-train_dataset = FoodImageDataset(tokenizer, vision_processor, train_samples, augment=True)
-val_dataset = FoodImageDataset(tokenizer, vision_processor, val_samples, augment=False)
-
-train_loader = DataLoader(train_dataset,
-                          batch_size=cfg['train']['batch_size'],
-                          sampler=sampler,
-                          collate_fn=collate_fn,
-                          num_workers=8, pin_memory=True)
-val_loader = DataLoader(val_dataset, batch_size=cfg['train']['batch_size'], shuffle=False, collate_fn=collate_fn)
-
-print(f"✅ Dataset: train={len(train_dataset)}, val={len(val_dataset)}, classes={len(class_to_samples)}")
+train_loader, val_loader, class_to_samples = build_dataloader(cfg, tokenizer, vision_processor)
 
 
 # =========================================================

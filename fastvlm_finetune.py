@@ -62,7 +62,7 @@ train_loader, val_loader, class_to_samples = build_dataloader(cfg, tokenizer, vi
 
 
 # =========================================================
-# (D) Evaluator
+# (D) Initialize Evaluator and test "before FT"
 # =========================================================
 evaluator = Evaluator(model, tokenizer, vision_processor, cfg)
 evaluator.test_sample("Before Fine-Tuning")

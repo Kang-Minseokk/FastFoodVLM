@@ -3,3 +3,8 @@ mlx-vlm
 debug_cheesecake.png
 llava.egg-info/
 result/
+**/__pycache__/
+FastFoodVLM-0.5B/
+checkpoints/
+nohup/
+.vscode/

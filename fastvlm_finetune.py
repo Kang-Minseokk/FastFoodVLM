@@ -58,7 +58,7 @@ print("✅ LoRA applied")
 # =========================================================
 # (C) Dataset
 # =========================================================
-train_loader, val_loader, _ = build_dataloader(cfg, tokenizer, vision_processor)
+train_loader, val_loader = build_dataloader(cfg, tokenizer, vision_processor)
 
 
 # =========================================================

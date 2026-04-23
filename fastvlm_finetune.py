@@ -14,6 +14,7 @@ from utils.saver import merge_and_save
 # Config
 # =========================================================
 cfg = load_config("configs/first_config.yaml")
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # 재현성
 random.seed(cfg['base']['seed'])

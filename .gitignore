@@ -8,3 +8,4 @@ FastFoodVLM-0.5B/
 checkpoints/
 nohup/
 .vscode/
+pyproject.toml

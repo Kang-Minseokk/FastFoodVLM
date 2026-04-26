@@ -1,5 +1,6 @@
 import torch
 from utils.run_infer import run_inference
+from model_base.build_model import forward_model
 
 
 class Evaluator:
@@ -22,12 +23,7 @@ class Evaluator:
         with torch.no_grad():
             for batch in val_loader:
                 batch = {k: v.to(self.cfg['base']['device'], non_blocking=True) for k, v in batch.items()}
-                out = self.model(
-                    input_ids=batch["input_ids"],
-                    attention_mask=batch["attention_mask"],
-                    images=batch["pixel_values"],
-                    labels=batch["labels"],
-                )
+                out = forward_model(self.model, batch, self.cfg)
                 val_loss_sum += out.loss.item()
                 val_steps += 1
         return val_loss_sum / max(1, val_steps)

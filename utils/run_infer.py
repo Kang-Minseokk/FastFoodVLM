@@ -48,8 +48,8 @@ def _infer_fastvlm(model, tokenizer, vision_processor, cfg, test_img):
 
 
 def _infer_siglip_qwen2(model, tokenizer, vision_processor, cfg, test_img):
-    from transformers import LlavaProcessor
-    processor = LlavaProcessor(image_processor=vision_processor, tokenizer=tokenizer)
+    from transformers import AutoProcessor
+    processor = AutoProcessor.from_pretrained(cfg['base']['model_name'])
 
     infer_msg = [{"role": "user", "content": "<image>\nAnswer ONLY with the food name in one or two English words. No extra text."}]
     infer_text = tokenizer.apply_chat_template(infer_msg, tokenize=False, add_generation_prompt=True)

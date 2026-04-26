@@ -21,8 +21,8 @@ class FoodImageDataset(Dataset):
         self.model_type = cfg['base']['model_type']
 
         if self.model_type == 'siglip_qwen2':
-            from transformers import LlavaProcessor
-            self.processor = LlavaProcessor(image_processor=vision_processor, tokenizer=tokenizer)
+            from transformers import AutoProcessor
+            self.processor = AutoProcessor.from_pretrained(cfg['base']['model_name'])
 
     def __len__(self):
         return len(self.samples)

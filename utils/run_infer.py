@@ -20,13 +20,16 @@ def run_inference(model, tokenizer, vision_processor, cfg, image_path):
     test_ids = torch.tensor([pre_ids + [cfg['base']['image_token_index']] + post_ids]).to(cfg['base']['device'])
     mask = torch.ones_like(test_ids)
 
+    model_type = cfg['base']['model_type']
+    pixel_kwarg = "images" if model_type == "fastvlm" else "pixel_values"
+
     model.eval()
     with torch.no_grad():
         im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
         gen = model.generate(
             inputs=test_ids,
             attention_mask=mask,
-            images=px,
+            **{pixel_kwarg: px},
             max_new_tokens=8,
             do_sample=False,
             eos_token_id=im_end_id,

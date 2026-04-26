@@ -1,4 +1,5 @@
 base:
+  model_type: "fastvlm" # fastvlm or siglip_qwen2
   model_name: "apple/FastVLM-0.5B"
   device: "cuda"
   seed: 42

@@ -1,6 +1,7 @@
 import torch
 from torch.optim import AdamW, SGD, Adam
 from transformers import get_cosine_schedule_with_warmup
+from model_base.build_model import forward_model
 
 OPTIMIZER_MAP = {
     "adamw": AdamW,
@@ -43,12 +44,7 @@ class Trainer:
         for step, batch in enumerate(train_loader):
             batch = {k: v.to(self.cfg['base']['device'], non_blocking=True) for k, v in batch.items()}
 
-            out = self.model(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                images=batch["pixel_values"],
-                labels=batch["labels"],
-            )
+            out = forward_model(self.model, batch, self.cfg)
             loss = out.loss
             loss.backward()
 

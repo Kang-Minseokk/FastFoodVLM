@@ -5,8 +5,8 @@ base:
   image_token_index: -200
   dataset_root: "dataset"
   test_image_path: "samples/avocado1.jpg"
-  save_dir: "FastFoodVLM-0.5B"
-  best_ckpt_dir: "checkpoints/best"
+  save_dir: "FastFoodVLM-0.5B/0424_trial1"
+  best_ckpt_dir: "checkpoints/0424_trial1"
   image_extensions:
     - ".jpg"
     - ".jpeg"

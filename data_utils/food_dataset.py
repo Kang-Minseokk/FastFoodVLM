@@ -18,6 +18,11 @@ class FoodImageDataset(Dataset):
         self.samples = samples
         self.cfg = cfg
         self.augment = augment
+        self.model_type = cfg['base']['model_type']
+
+        if self.model_type == 'siglip_qwen2':
+            from transformers import LlavaProcessor
+            self.processor = LlavaProcessor(image_processor=vision_processor, tokenizer=tokenizer)
 
     def __len__(self):
         return len(self.samples)
@@ -38,25 +43,22 @@ class FoodImageDataset(Dataset):
         pil_img = Image.open(img_path).convert("RGB")
         if self.augment:
             pil_img = train_augment(pil_img)
-        px = self.vision_processor(images=pil_img, return_tensors="pt")["pixel_values"][0]
-        px = px.to(torch.bfloat16)
 
         food_label = food_name.replace("_", " ").replace("-", " ")
 
-        messages = [
-            {
-                "role": "user",
-                "content": "<image>\nAnswer ONLY with the food name in one or two English words. No extra text."
-            },
-            {
-                "role": "assistant",
-                "content": food_label
-            }
-        ]
-        chat_text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False
-        )
+        if self.model_type == 'siglip_qwen2':
+            return self._getitem_siglip_qwen2(pil_img, food_label)
+        return self._getitem_fastvlm(pil_img, food_label)
 
+    def _getitem_fastvlm(self, pil_img, food_label):
+        px = self.vision_processor(images=pil_img, return_tensors="pt")["pixel_values"][0]
+        px = px.to(torch.bfloat16)
+
+        messages = [
+            {"role": "user", "content": "<image>\nAnswer ONLY with the food name in one or two English words. No extra text."},
+            {"role": "assistant", "content": food_label}
+        ]
+        chat_text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
         input_ids = self.inject_image_token(chat_text)
         input_ids = torch.tensor(input_ids, dtype=torch.long)
 
@@ -71,8 +73,36 @@ class FoodImageDataset(Dataset):
         return {
             "input_ids": input_ids,
             "labels": labels,
-            # Don't confuse with real "attention" in transformer block 😂 
-            # This is just for padding processing as variable length!
+            "attention_mask": torch.ones_like(input_ids),
+            "pixel_values": px,
+        }
+
+    def _getitem_siglip_qwen2(self, pil_img, food_label):
+        messages = [
+            {"role": "user", "content": "<image>\nAnswer ONLY with the food name in one or two English words. No extra text."},
+            {"role": "assistant", "content": food_label}
+        ]
+        chat_full = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+
+        inputs = self.processor(text=chat_full, images=pil_img, return_tensors="pt")
+        input_ids = inputs.input_ids[0]
+        px = inputs.pixel_values[0].to(torch.bfloat16)
+
+        # Find where the answer starts by searching backward for its token ids
+        answer_ids = self.tokenizer(food_label, add_special_tokens=False).input_ids
+        ans_start = len(input_ids)
+        for i in range(len(input_ids) - len(answer_ids), -1, -1):
+            if input_ids[i:i + len(answer_ids)].tolist() == answer_ids:
+                ans_start = i
+                break
+
+        labels = input_ids.clone()
+        labels[:ans_start] = -100
+        labels[labels == self.cfg['base']['image_token_index']] = -100
+
+        return {
+            "input_ids": input_ids,
+            "labels": labels,
             "attention_mask": torch.ones_like(input_ids),
             "pixel_values": px,
         }

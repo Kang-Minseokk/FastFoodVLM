@@ -2,12 +2,11 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-def build_model(cfg):
+def _build_fastvlm(cfg):
     model_name = cfg['base']['model_name']
     device = cfg['base']['device']
 
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
@@ -26,38 +25,51 @@ def build_model(cfg):
             for layer in vit_layers[-cfg['train']['unfreeze_vision_blocks']:]:
                 for p in layer.parameters():
                     p.requires_grad = True
-            print(f"✅ Vision Tower 마지막 {cfg['train']['unfreeze_vision_blocks']}개 블록 unfrozen")
+            print(f"✅ Vision Tower last {cfg['train']['unfreeze_vision_blocks']} blocks unfrozen")
         except Exception as e:
-            print(f"⚠️  Vision Tower unfreeze 실패: {e}")
-
-    print("✅ Model loaded + Vision Tower frozen")
+            print(f"⚠️  Vision Tower unfreeze failed: {e}")
 
     return model, tokenizer, vision_processor
 
 
-PROJECTOR_KEYWORDS = ["mm_projector", "multi_modal_projector", "projector", "connector", "mm_proj"]
+def _build_siglip_qwen2(cfg):
+    raise NotImplementedError("siglip_qwen2 not yet implemented")
 
-def find_and_unfreeze_projector(model):
-    unfrozen = []
-    seen = set()
 
-    for name, module in model.named_modules():
-        name_lower = name.lower()
-        if any(kw in name_lower for kw in PROJECTOR_KEYWORDS) and len(name.split(".")) <= 5:
-            if any(name.startswith(seen_name + ".") for seen_name in seen):
-                continue
-            for p in module.parameters():
-                p.requires_grad = True
-            seen.add(name)
-            unfrozen.append(name)
+_BUILDERS = {
+    "fastvlm": _build_fastvlm,
+    "siglip_qwen2": _build_siglip_qwen2,
+}
 
-    if unfrozen:
-        for n in unfrozen:
-            print(f"✅ mm_projector unfrozen: {n}")
-    else:
-        print("⚠️  projector를 찾지 못했습니다. 아래 모듈 목록을 확인하세요:")
-        for name, _ in model.named_modules():
-            if len(name.split(".")) <= 3:
-                print(f"   {name}")
 
-    return len(unfrozen) > 0
+def build_model(cfg):
+    model_type = cfg['base']['model_type']
+    if model_type not in _BUILDERS:
+        raise ValueError(f"Unknown model_type '{model_type}'. Choose from {list(_BUILDERS)}")
+
+    model, tokenizer, vision_processor = _BUILDERS[model_type](cfg)
+    print(f"✅ Model loaded (type={model_type})")
+    return model, tokenizer, vision_processor
+
+
+def _unfreeze_projector_fastvlm(model):
+    projector = model.base_model.model.model.mm_projector
+    for p in projector.parameters():
+        p.requires_grad = True
+    print("✅ Projector unfrozen: base_model.model.model.mm_projector")
+
+
+_PROJECTOR_UNFREEZERS = {
+    "fastvlm": _unfreeze_projector_fastvlm,
+    "siglip_qwen2": None,
+}
+
+
+def unfreeze_projector(model, cfg):
+    model_type = cfg['base']['model_type']
+    if model_type not in _PROJECTOR_UNFREEZERS:
+        raise ValueError(f"Unknown model_type '{model_type}'")
+    fn = _PROJECTOR_UNFREEZERS[model_type]
+    if fn is None:
+        raise NotImplementedError(f"unfreeze_projector not yet implemented for '{model_type}'")
+    fn(model)

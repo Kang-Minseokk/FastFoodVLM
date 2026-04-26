@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from peft import get_peft_model, LoraConfig, TaskType
 from utils.config import load_config
-from model_base.build_model import build_model, find_and_unfreeze_projector
+from model_base.build_model import build_model, unfreeze_projector
 from data_utils.build_dataloader import build_dataloader
 from utils.evaluator import Evaluator
 from utils.trainer import Trainer
@@ -51,7 +51,7 @@ model = get_peft_model(model, lora_config)
 # =========================================================
 # (B-sub) mm_projector unfreeze (PEFT 적용 후에 해야 함)
 # =========================================================
-find_and_unfreeze_projector(model)
+unfreeze_projector(model, cfg)
 model.print_trainable_parameters()
 print("✅ LoRA applied")
 

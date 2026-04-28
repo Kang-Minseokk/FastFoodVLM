@@ -56,6 +56,8 @@ def build_classifier_dataloader(cfg, vision_processor):
         batch_size=cfg['train']['batch_size'],
         shuffle=False,
         collate_fn=classifier_collate_fn,
+        num_workers=8,
+        pin_memory=True,
     )
 
     print(f"✅ Classifier dataset: train={len(train_dataset)}, val={len(val_dataset)}, classes={len(class_names)}")

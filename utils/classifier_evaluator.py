@@ -43,6 +43,8 @@ class ClassifierEvaluator:
         print(f"\n===== {label} =====")
         pil_img = Image.open(img_path).convert("RGB")
         px = self.vision_processor(images=pil_img, return_tensors="pt")["pixel_values"]
+        while px.dim() > 4:
+            px = px[0]
         px = px.to(self.device, dtype=torch.bfloat16)
 
         self.model.eval()

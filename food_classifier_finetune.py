@@ -27,6 +27,10 @@ if torch.cuda.is_available():
 # =========================================================
 processor = AutoProcessor.from_pretrained(cfg['base']['model_name'])
 vision_processor = processor.image_processor
+# LlavaOnevision processor tiles images by default → produces 5D tensors.
+# Disable splitting so the vision encoder receives standard (B, C, H, W) input.
+if hasattr(vision_processor, 'do_image_splitting'):
+    vision_processor.do_image_splitting = False
 
 
 # =========================================================

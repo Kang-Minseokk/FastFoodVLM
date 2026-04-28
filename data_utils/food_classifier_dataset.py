@@ -27,7 +27,9 @@ class FoodClassifierDataset(Dataset):
         if self.augment:
             pil_img = train_augment(pil_img)
 
-        px = self.vision_processor(images=pil_img, return_tensors="pt")["pixel_values"][0]
+        px = self.vision_processor(images=pil_img, return_tensors="pt")["pixel_values"]
+        while px.dim() > 3:
+            px = px[0]
         label = self.class_to_idx[food_name]
         return {
             "pixel_values": px.to(torch.bfloat16),

@@ -9,3 +9,4 @@ checkpoints/
 nohup/
 .vscode/
 pyproject.toml
+output/

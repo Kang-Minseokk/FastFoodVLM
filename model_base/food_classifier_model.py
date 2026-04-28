@@ -32,6 +32,7 @@ class FoodClassifier(nn.Module):
             features = outputs.pooler_output
         else:
             features = outputs.last_hidden_state.mean(dim=1)
+        features = features.to(self.head.layers[0].weight.dtype)
         return self.head(features)
 
     def count_trainable_params(self):

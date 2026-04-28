@@ -1,0 +1,31 @@
+base:  
+  model_type: "siglip_qwen2" # fastvlm or siglip_qwen2
+  model_name: "llava-hf/llava-onevision-qwen2-0.5b-si-hf" # apple/FastVLM-0.5B or llava-hf/llava-interleave-qwen-0.5b-si-hf
+  device: "cuda"
+  seed: 42
+  dataset_root: "dataset"
+  test_image_path: "samples/avocado1.jpg"
+  save_dir: "Siglip_Qwen2/0428_trial1" # FastFoodVLM-0.5B or Siglip_Qwen2
+  best_ckpt_dir: "checkpoints/0428_siglip_qwen2" # Check here!
+  image_extensions:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".webp"
+    - ".bmp"
+    - ".tif"
+    - ".tiff"
+
+model:
+  hidden_dims: [512]
+  dropout: 0.1
+
+train:
+  epochs: 20
+  batch_size: 32
+  lr: 1.0e-3
+  weight_decay: 0.01
+  optimizer: "adamw"
+  grad_clip: 1.0
+  val_split: 0.1
+  unfreeze_vision_blocks: 0

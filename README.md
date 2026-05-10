@@ -35,15 +35,16 @@ Each subdirectory name is used as the food label. Supported formats: `.jpg`, `.j
 
 ### 3. Configure training
 
-Edit `configs/first_config.yaml`:
+Edit `configs/fastvlm_config.yaml`:
 
 ```yaml
 base:
+  model_type: "fastvlm"
   model_name: "apple/FastVLM-0.5B"
   device: "cuda"
   dataset_root: "dataset"
-  save_dir: "FastFoodVLM-0.5B"
-  best_ckpt_dir: "checkpoints/best"
+  save_dir: "FastFoodVLM-0.5B/0510_trial1"
+  best_ckpt_dir: "checkpoints/0510_fastvlm"
 
 train:
   epochs: 20
@@ -58,7 +59,7 @@ train:
 ### 4. Run training
 
 ```bash
-python fastvlm_finetune.py
+python fastvlm_finetune.py --config configs/fastvlm_config.yaml
 ```
 
 ### 5. Outputs

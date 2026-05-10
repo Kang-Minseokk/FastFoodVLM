@@ -1,13 +1,13 @@
 base:
-  model_type: "fastvlm" # fastvlm or siglip_qwen2
-  model_name: "apple/FastVLM-0.5B"
+  model_type: "siglip_qwen2" # fastvlm or siglip_qwen2
+  model_name: "llava-hf/llava-onevision-qwen2-0.5b-si-hf" # apple/FastVLM-0.5B or llava-hf/llava-interleave-qwen-0.5b-si-hf
   device: "cuda"
   seed: 42
   image_token_index: -200
   dataset_root: "dataset"
   test_image_path: "samples/avocado1.jpg"
-  save_dir: "FastFoodVLM-0.5B/0424_trial1"
-  best_ckpt_dir: "checkpoints/0424_trial1"
+  save_dir: "Siglip_Qwen2/0428_trial1" # FastFoodVLM-0.5B or Siglip_Qwen2
+  best_ckpt_dir: "checkpoints/0428_siglip_qwen2" # Check here!
   image_extensions:
     - ".jpg"
     - ".jpeg"

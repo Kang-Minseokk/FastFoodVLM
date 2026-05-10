@@ -1,10 +1,14 @@
+import argparse
 import os
 import random
 import numpy as np
 import torch
-from transformers import AutoProcessor
 from utils.config import load_config
-from model_base.food_classifier_model import build_food_classifier, save_classifier
+from model_base.food_classifier_model import (
+    build_vision_backbone,
+    build_food_classifier,
+    save_classifier,
+)
 from data_utils.build_classifier_dataloader import build_classifier_dataloader
 from utils.classifier_trainer import ClassifierTrainer
 from utils.classifier_evaluator import ClassifierEvaluator
@@ -12,7 +16,11 @@ from utils.classifier_evaluator import ClassifierEvaluator
 # =========================================================
 # Config
 # =========================================================
-cfg = load_config("configs/food_classifier_config.yaml")
+parser = argparse.ArgumentParser()
+parser.add_argument("--config", type=str, default="configs/food_classifier_config.yaml",
+                    help="Path to YAML config file")
+args = parser.parse_args()
+cfg = load_config(args.config)
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 random.seed(cfg['base']['seed'])
@@ -23,14 +31,9 @@ if torch.cuda.is_available():
 
 
 # =========================================================
-# (A) Vision Processor
+# (A) Vision backbone (encoder + processor + dim)
 # =========================================================
-processor = AutoProcessor.from_pretrained(cfg['base']['model_name'])
-vision_processor = processor.image_processor
-# LlavaOnevision processor tiles images by default → produces 5D tensors.
-# Disable splitting so the vision encoder receives standard (B, C, H, W) input.
-if hasattr(vision_processor, 'do_image_splitting'):
-    vision_processor.do_image_splitting = False
+vision_encoder, vision_processor, vision_dim = build_vision_backbone(cfg)
 
 
 # =========================================================
@@ -42,9 +45,9 @@ num_classes = len(class_to_idx)
 
 
 # =========================================================
-# (C) Build Model
+# (C) Build Classifier
 # =========================================================
-model = build_food_classifier(cfg, num_classes)
+model = build_food_classifier(cfg, vision_encoder, vision_dim, num_classes)
 model.count_trainable_params()
 
 

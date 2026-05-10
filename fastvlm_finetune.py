@@ -1,3 +1,4 @@
+import argparse
 import os
 import random
 import numpy as np
@@ -13,7 +14,11 @@ from utils.saver import merge_and_save
 # =========================================================
 # Config
 # =========================================================
-cfg = load_config("configs/first_config.yaml")
+parser = argparse.ArgumentParser()
+parser.add_argument("--config", type=str, default="configs/fastvlm_config.yaml",
+                    help="Path to YAML config file")
+args = parser.parse_args()
+cfg = load_config(args.config)
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # 재현성

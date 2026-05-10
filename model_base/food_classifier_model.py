@@ -27,11 +27,24 @@ class FoodClassifier(nn.Module):
         self.head = MLPHead(vision_dim, num_classes, hidden_dims, dropout)
 
     def forward(self, pixel_values):
-        outputs = self.vision_encoder(pixel_values=pixel_values)
-        if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
+        outputs = self.vision_encoder(pixel_values)
+
+        if isinstance(outputs, torch.Tensor):
+            if outputs.ndim == 3:
+                features = outputs.mean(dim=1)
+            elif outputs.ndim == 4:
+                features = outputs.mean(dim=[2, 3])
+            elif outputs.ndim == 2:
+                features = outputs
+            else:
+                raise ValueError(f"Unexpected vision output shape: {tuple(outputs.shape)}")
+        elif hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
             features = outputs.pooler_output
-        else:
+        elif hasattr(outputs, 'last_hidden_state'):
             features = outputs.last_hidden_state.mean(dim=1)
+        else:
+            raise ValueError(f"Unsupported vision encoder output: {type(outputs)}")
+
         features = features.to(self.head.layers[0].weight.dtype)
         return self.head(features)
 
@@ -40,40 +53,99 @@ class FoodClassifier(nn.Module):
         print(f"✅ Trainable parameters: {total:,}")
 
 
-def build_food_classifier(cfg, num_classes):
-    from transformers import AutoModelForVision2Seq
+def _load_siglip_backbone(cfg):
+    from transformers import AutoModelForVision2Seq, AutoProcessor
 
     model_name = cfg['base']['model_name']
-    device = cfg['base']['device']
 
-    # Load on CPU first to avoid holding full model on GPU
     full_model = AutoModelForVision2Seq.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
     )
-
     vision_encoder = full_model.vision_tower
     vision_dim = vision_encoder.config.hidden_size
 
-    # Release the rest of the model before moving to device
     del full_model
     gc.collect()
     torch.cuda.empty_cache()
 
-    vision_encoder = vision_encoder.to(device)
+    processor = AutoProcessor.from_pretrained(model_name)
+    vision_processor = processor.image_processor
+    if hasattr(vision_processor, 'do_image_splitting'):
+        vision_processor.do_image_splitting = False
+
+    return vision_encoder, vision_processor, vision_dim
+
+
+def _load_fastvlm_backbone(cfg):
+    from transformers import AutoModelForCausalLM
+
+    model_name = cfg['base']['model_name']
+
+    full_model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.bfloat16,
+        trust_remote_code=True,
+    )
+    vision_tower = full_model.get_vision_tower()
+    vision_processor = vision_tower.image_processor
+    vision_dim = vision_tower.hidden_size
+
+    del full_model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return vision_tower, vision_processor, vision_dim
+
+
+_BACKBONE_LOADERS = {
+    "siglip_qwen2": _load_siglip_backbone,
+    "fastvlm": _load_fastvlm_backbone,
+}
+
+
+def build_vision_backbone(cfg):
+    model_type = cfg['base']['model_type']
+    if model_type not in _BACKBONE_LOADERS:
+        raise ValueError(f"Unknown model_type '{model_type}'. Choose from {list(_BACKBONE_LOADERS)}")
+    encoder, processor, dim = _BACKBONE_LOADERS[model_type](cfg)
+    print(f"✅ Vision backbone loaded (type={model_type}, vision_dim={dim})")
+    return encoder, processor, dim
+
+
+def _apply_freeze_policy(cfg, vision_encoder):
+    model_type = cfg['base']['model_type']
+    n_unfreeze = cfg['train'].get('unfreeze_vision_blocks', 0)
 
     for p in vision_encoder.parameters():
         p.requires_grad = False
 
-    if cfg['train'].get('unfreeze_vision_blocks', 0) > 0:
-        try:
-            vit_layers = list(vision_encoder.vision_model.encoder.layers)
-            for layer in vit_layers[-cfg['train']['unfreeze_vision_blocks']:]:
-                for p in layer.parameters():
-                    p.requires_grad = True
-            print(f"✅ Vision Tower last {cfg['train']['unfreeze_vision_blocks']} blocks unfrozen")
-        except Exception as e:
-            print(f"⚠️  Vision Tower unfreeze failed: {e}")
+    if n_unfreeze <= 0:
+        return
+
+    if model_type == 'fastvlm':
+        # MobileCLIPVisionTower wraps forward in torch.no_grad() unless
+        # tune_vision_tower=True, so requires_grad alone is insufficient.
+        # FastVLM block-level unfreeze is not implemented yet — skip with warning.
+        print(f"⚠️  unfreeze_vision_blocks={n_unfreeze} ignored for fastvlm "
+              f"(not implemented). Encoder remains frozen.")
+        return
+
+    try:
+        vit_layers = list(vision_encoder.vision_model.encoder.layers)
+        for layer in vit_layers[-n_unfreeze:]:
+            for p in layer.parameters():
+                p.requires_grad = True
+        print(f"✅ Vision Tower last {n_unfreeze} blocks unfrozen")
+    except Exception as e:
+        print(f"⚠️  Vision Tower unfreeze failed: {e}")
+
+
+def build_food_classifier(cfg, vision_encoder, vision_dim, num_classes):
+    device = cfg['base']['device']
+    vision_encoder = vision_encoder.to(device)
+
+    _apply_freeze_policy(cfg, vision_encoder)
 
     classifier = FoodClassifier(
         vision_encoder=vision_encoder,

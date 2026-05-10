@@ -1,0 +1,31 @@
+base:
+  model_type: "fastvlm"
+  model_name: "apple/FastVLM-0.5B"
+  device: "cuda:1"
+  seed: 42
+  dataset_root: "dataset"
+  test_image_path: "samples/avocado1.jpg"
+  save_dir: "FastVLM_Classifier/0510_trial1"
+  best_ckpt_dir: "checkpoints/0510_fastvlm_classifier"
+  image_extensions:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".webp"
+    - ".bmp"
+    - ".tif"
+    - ".tiff"
+
+model:
+  hidden_dims: [512]
+  dropout: 0.1
+
+train:
+  epochs: 20
+  batch_size: 32
+  lr: 1.0e-3
+  weight_decay: 0.01
+  optimizer: "adamw"
+  grad_clip: 1.0
+  val_split: 0.1
+  unfreeze_vision_blocks: 0
